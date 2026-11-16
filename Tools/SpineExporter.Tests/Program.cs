@@ -213,7 +213,7 @@ static Task TestConfigLoadingAsync()
 static string FindRepositoryRoot()
 {
     var current = new DirectoryInfo(AppContext.BaseDirectory);
-    while (current is not null && !Directory.Exists(Path.Combine(current.FullName, ".git")))
+    while (current is not null && !File.Exists(Path.Combine(current.FullName, "Tools", "SpineExporter", "SpineExporter.csproj")))
         current = current.Parent;
     return current?.FullName ?? throw new InvalidOperationException("Repository root not found.");
 }

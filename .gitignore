@@ -19,7 +19,7 @@
 **/UserData/
 **/staging/
 **/test-output/
-artifacts/
+/artifacts/
 *.zip
 *.log
 *.tmp
