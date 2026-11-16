@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 2,
+  "settings": {
+    "requiredAnimations": ["idle", "attack"],
+    "dataVersion": "4.1",
+    "requireJson": false,
+    "requireBinary": true,
+    "requireAtlas": true,
+    "requireTextures": true
+  }
+}

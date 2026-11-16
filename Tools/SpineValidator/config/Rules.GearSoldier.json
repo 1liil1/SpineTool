@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 2,
+  "enabled": true,
+  "showFailureDialog": true,
+  "settings": {
+    "requiredAnimations": ["attack"],
+    "warningBones": ["BulletPostion"],
+    "events": [
+      {
+        "animation": "attack",
+        "eventName": "attack",
+        "minCount": 1
+      }
+    ],
+    "dataVersion": "4.1",
+    "requireJson": false,
+    "requireBinary": true,
+    "requireAtlas": true,
+    "requireTextures": true
+  }
+}

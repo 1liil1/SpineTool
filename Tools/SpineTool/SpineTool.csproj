@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <RootNamespace>IdleGearDefence.SpineTool</RootNamespace>
+    <AssemblyName>SpineTool</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../SpineExporter/SpineExporter.csproj" />
+    <ProjectReference Include="../SpineValidator/SpineValidator.csproj" />
+    <Content Include="../SpineExporter/config/SpineExporter.json" Link="config/SpineExporter.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../SpineExporter/config/SpineExporter.GearSoldier.json" Link="config/SpineExporter.GearSoldier.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../SpineExporter/config/official/**/*.json" Link="config/official/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../SpineValidator/config/Rules.json" Link="config/Rules.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../SpineValidator/config/Rules.None.json" Link="config/Rules.None.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../SpineValidator/config/Rules.GearSoldier.json" Link="config/Rules.GearSoldier.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

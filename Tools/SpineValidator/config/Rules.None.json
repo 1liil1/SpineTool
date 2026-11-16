@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 2,
+  "enabled": false,
+  "showFailureDialog": false,
+  "settings": {
+    "requireJson": false,
+    "requireBinary": false,
+    "requireAtlas": false,
+    "requireTextures": false
+  }
+}

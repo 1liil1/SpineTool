@@ -1,0 +1,12 @@
+!*.csproj
+!*.cs
+!*.json
+!*.md
+!src/
+!src/**/*.cs
+!config/
+!config/**/*.json
+!config/**/*.md
+obj/
+bin/
+staging/

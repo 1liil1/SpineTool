@@ -1,0 +1,34 @@
+# .NET / IDE
+**/bin/
+**/obj/
+.vs/
+.idea/
+*.user
+*.suo
+# Unity caches and local state
+**/[Ll]ibrary/
+**/[Tt]emp/
+**/[Oo]bj/
+**/[Ll]ogs/
+**/[Uu]ser[Ss]ettings/
+**/Build/
+**/Builds/
+**/LocalTests/
+**/LocalTests.meta
+# Personal state, runtime data, exports and release archives
+**/UserData/
+**/staging/
+**/test-output/
+artifacts/
+*.zip
+*.log
+*.tmp
+spine-executable.txt
+cards.json
+preview-history.json
+output-directories.json
+SpineExporter.Spine38Smoke.json
+# Local tooling
+.local/
+.DS_Store
+Thumbs.db

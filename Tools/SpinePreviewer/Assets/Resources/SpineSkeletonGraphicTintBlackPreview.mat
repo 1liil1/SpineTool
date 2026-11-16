@@ -1,0 +1,13 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!21 &2100000
+Material:
+  serializedVersion: 8
+  m_ObjectHideFlags: 0
+  m_Name: SpineSkeletonGraphicTintBlackPreview
+  m_Shader: {fileID: 4800000, guid: f64c7bc238bb2c246b8ca1912b2b6b9c, type: 3}
+  m_SavedProperties:
+    serializedVersion: 3
+    m_TexEnvs: []
+    m_Floats: []
+    m_Colors: []

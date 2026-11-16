@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 2,
+  "toolchain": {
+    "spineExecutable": "",
+    "requiredSpineVersion": "4.1",
+    "stagingRoot": "staging",
+    "keepStagingOnSuccess": false,
+    "keepStagingOnFailure": true
+  },
+  "export": {
+    "jsonExportSettingsFile": "official/GearSoldier/json.json",
+    "binaryExportSettingsFile": "official/GearSoldier/binary.json",
+    "exportSettingsFile": "",
+    "texturePacker": {
+      "mode": "EmbeddedAttachments",
+      "settingsFile": "official/GearSoldier/pack.json",
+      "inputDirectory": "",
+      "name": null
+    },
+    "output": {
+      "outputSubdirectoryTemplate": "{resourceName}",
+      "atlasExtension": ".atlas.txt",
+      "binaryExtension": ".skel.bytes",
+      "allowOverwrite": false
+    },
+    "emitJson": true,
+    "emitBinary": true,
+    "requireAtlas": true,
+    "requireTextures": true,
+    "cleanAnimation": false,
+    "requirePremultipliedAlpha": true
+  }
+}

@@ -1,0 +1,6 @@
+!*.csproj
+!*.cs
+!*.json
+!*.md
+obj/
+bin/
