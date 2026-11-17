@@ -6,7 +6,8 @@ using System.Runtime.InteropServices;
 using System.Text;
 using UnityEngine;
 
-public sealed class PreviewController : MonoBehaviour
+[DefaultExecutionOrder(-100)]
+public sealed partial class PreviewController : MonoBehaviour
 {
     private PreviewLoadedAsset loaded;
     private string resourceDirectory;
@@ -20,6 +21,7 @@ public sealed class PreviewController : MonoBehaviour
     private float zoom = 1f;
     private bool tintBlack = true;
     private bool playing = true;
+    private bool draggingObject;
     private Vector3 dragOrigin;
     private Vector3 objectOrigin;
     private Camera previewCamera;
@@ -30,11 +32,17 @@ public sealed class PreviewController : MonoBehaviour
     private GameObject checkerPlane;
     private Material checkerMaterial;
     private string displayMode = "";
-    private readonly Queue<string> eventLog = new();
-    private const int MaxEventLogCount = 200;
-    private bool showEventLog = true;
     private Rect controlRect;
-    private Rect eventLogRect;
+    private Rect timelineRect;
+    private bool scrubbing;
+    private int scrubControl;
+    private int selectedEvent = -1;
+    private IReadOnlyList<Spine.Event> animationEvents = Array.Empty<Spine.Event>();
+    private GUIStyle timelineLabel;
+    private GUIStyle eventLabel;
+    private GUIStyle eventMarker;
+    private string resourceFilter = string.Empty;
+    private DateTime lastResourceChangeUtc;
     private Vector2 controlScroll;
     private GUIStyle menuScrollStyle;
     private GUIStyle wrappedLabel;
@@ -65,8 +73,6 @@ public sealed class PreviewController : MonoBehaviour
         public string LastUsedAt = string.Empty;
     }
 
-    private const string EventLogPreference = "IdleGearDefence.SpinePreviewer.EventLogVisible";
-
     private void Start()
     {
         previewCamera = Camera.main;
@@ -81,7 +87,6 @@ public sealed class PreviewController : MonoBehaviour
         previewCamera.clearFlags = CameraClearFlags.SolidColor;
         previewCamera.backgroundColor = background;
         CreateCheckerboard();
-        showEventLog = PlayerPrefs.GetInt(EventLogPreference, 1) != 0;
         LoadPreviewHistory();
         resourceDirectory = ReadInputDirectory();
         displayMode = ReadInputArgument("--display-mode");
@@ -90,7 +95,8 @@ public sealed class PreviewController : MonoBehaviour
 
     private void Update()
     {
-        if (reloadRequested)
+        UpdateUiRects();
+        if (reloadRequested && (DateTime.UtcNow - lastResourceChangeUtc).TotalMilliseconds >= 300)
         {
             reloadRequested = false;
             LoadResource();
@@ -98,23 +104,25 @@ public sealed class PreviewController : MonoBehaviour
         if (loaded == null) return;
 
         var animationState = loaded.AnimationState;
-        if (animationState != null) animationState.TimeScale = playing ? speed : 0f;
+        if (animationState != null) animationState.TimeScale = playing && !scrubbing ? speed : 0f;
 
         if (Input.GetMouseButtonDown(0) && !IsPointerOverUi(Input.mousePosition))
         {
+            draggingObject = true;
             dragOrigin = Input.mousePosition;
             objectOrigin = loaded.Root.transform.position;
         }
-        else if (Input.GetMouseButton(0) && !IsPointerOverUi(Input.mousePosition))
+        else if (draggingObject && Input.GetMouseButton(0) && !IsPointerOverUi(Input.mousePosition))
         {
             var delta = Input.mousePosition - dragOrigin;
             var candidate = objectOrigin + new Vector3(delta.x, delta.y, 0) * 0.01f * zoom;
             if (!float.IsNaN(candidate.x) && !float.IsInfinity(candidate.x) && !float.IsNaN(candidate.y) && !float.IsInfinity(candidate.y))
                 loaded.Root.transform.position = candidate;
         }
+        if (Input.GetMouseButtonUp(0)) draggingObject = false;
 
         var wheel = Input.mouseScrollDelta.y;
-        if (Mathf.Abs(wheel) > 0.01f && !IsPointerOverControlMenu(Input.mousePosition))
+        if (Mathf.Abs(wheel) > 0.01f && !IsPointerOverUi(Input.mousePosition))
         {
             var previousZoom = zoom;
             var previousSize = previewCamera.orthographicSize;
@@ -141,7 +149,7 @@ public sealed class PreviewController : MonoBehaviour
 
     private void OnGUI()
     {
-        controlRect = new Rect(12, 12, 380, Screen.height - 24);
+        UpdateUiRects();
         EnsureMenuStyles();
         ApplyControlMenuScroll();
         GUILayout.BeginArea(controlRect, GUI.skin.box);
@@ -171,7 +179,9 @@ public sealed class PreviewController : MonoBehaviour
             GUILayout.Label("动画");
             foreach (var animation in loaded.AnimationNames)
             {
-                if (GUILayout.Button(animation)) Play(animation, true);
+                var duration = loaded.Data.FindAnimation(animation).Duration;
+                var active = loaded.AnimationState.GetCurrent(0)?.Animation.Name == animation;
+                if (GUILayout.Button($"{(active ? "● " : "")} {animation}   ·   {duration:0.###} 秒")) Play(animation, true);
             }
             GUILayout.Label("Skin");
             foreach (var skin in loaded.SkinNames)
@@ -181,7 +191,7 @@ public sealed class PreviewController : MonoBehaviour
         }
         GUILayout.Label("速度 " + speed.ToString("F2"));
         speed = GUILayout.HorizontalSlider(speed, 0f, 3f);
-        if (GUILayout.Button(playing ? "暂停" : "播放")) playing = !playing;
+        if (GUILayout.Button(playing ? "暂停" : "播放")) TogglePlayback();
         GUILayout.BeginHorizontal();
         GUILayout.Label("缩放 " + zoom.ToString("F3"), GUILayout.ExpandWidth(true));
         if (GUILayout.Button("重置", GUILayout.Width(72))) ResetZoom();
@@ -205,36 +215,7 @@ public sealed class PreviewController : MonoBehaviour
         GUILayout.EndArea();
 
         DrawBoneMarkerLabel();
-
-        eventLogRect = new Rect(Screen.width - 632, Screen.height - 232, 620, 220);
-        if (showEventLog)
-        {
-            GUILayout.BeginArea(eventLogRect, GUI.skin.box);
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("Spine 事件日志", GUI.skin.label);
-            if (GUILayout.Button("关闭", GUILayout.Width(60)))
-            {
-                showEventLog = false;
-                PlayerPrefs.SetInt(EventLogPreference, 0);
-                PlayerPrefs.Save();
-            }
-            if (GUILayout.Button("清空", GUILayout.Width(60))) eventLog.Clear();
-            GUILayout.EndHorizontal();
-            foreach (var line in eventLog.Reverse().Take(8)) GUILayout.Label(line);
-            GUILayout.EndArea();
-        }
-        else
-        {
-            var openRect = new Rect(Screen.width - 140, Screen.height - 42, 128, 30);
-            GUILayout.BeginArea(openRect);
-            if (GUILayout.Button("打开事件日志"))
-            {
-                showEventLog = true;
-                PlayerPrefs.SetInt(EventLogPreference, 1);
-                PlayerPrefs.Save();
-            }
-            GUILayout.EndArea();
-        }
+        DrawTimeline();
     }
 
     private void EnsureMenuStyles()
@@ -244,22 +225,30 @@ public sealed class PreviewController : MonoBehaviour
         menuScrollStyle.normal.background = null;
         wrappedLabel = new GUIStyle(GUI.skin.label) { wordWrap = true };
         resourceButton = new GUIStyle(GUI.skin.button) { wordWrap = true, alignment = TextAnchor.MiddleLeft };
+        timelineLabel = new GUIStyle(GUI.skin.label) { fontSize = 14, alignment = TextAnchor.MiddleLeft, clipping = TextClipping.Clip };
+        eventLabel = new GUIStyle(GUI.skin.label) { fontSize = 12, clipping = TextClipping.Clip };
+        eventMarker = new GUIStyle(GUI.skin.button) { padding = new RectOffset(), fontSize = 14 };
     }
 
     private void DrawResourceSelector()
     {
         if (resourceEntries.Count == 0) return;
-        GUILayout.Label($"目录内资源（{resourceEntries.Count}）");
-        foreach (var resource in resourceEntries)
+        GUILayout.Label($"目录及子目录资源（{resourceEntries.Count}）");
+        resourceFilter = GUILayout.TextField(resourceFilter, GUILayout.MinHeight(24));
+        GUILayout.Label("输入名称或子目录筛选；空白显示全部", wrappedLabel);
+        var visible = resourceEntries.Where(item => string.IsNullOrWhiteSpace(resourceFilter)
+            || item.DisplayName.IndexOf(resourceFilter, StringComparison.OrdinalIgnoreCase) >= 0).ToArray();
+        foreach (var resource in visible)
         {
-            var selected = string.Equals(resource.Name, selectedResourceName, StringComparison.OrdinalIgnoreCase);
-            if (GUILayout.Button((selected ? "● " : "○ ") + resource.Name, resourceButton, GUILayout.MinHeight(28)) && !selected)
+            var selected = string.Equals(resource.Key, selectedResourceName, StringComparison.OrdinalIgnoreCase);
+            if (GUILayout.Button((selected ? "● " : "○ ") + resource.DisplayName, resourceButton, GUILayout.MinHeight(28)) && !selected)
             {
-                selectedResourceName = resource.Name;
+                selectedResourceName = resource.Key;
                 // Defer until Update so animation/skin controls keep a stable layout this frame.
                 reloadRequested = true;
             }
         }
+        if (visible.Length == 0) GUILayout.Label("没有匹配的资源");
     }
 
     private void ApplyControlMenuScroll()
@@ -270,17 +259,10 @@ public sealed class PreviewController : MonoBehaviour
         current.Use();
     }
 
-    private bool IsPointerOverControlMenu(Vector3 mousePosition)
-    {
-        var point = new Vector2(mousePosition.x, Screen.height - mousePosition.y);
-        return controlRect.Contains(point);
-    }
-
     private bool IsPointerOverUi(Vector3 mousePosition)
     {
         var point = new Vector2(mousePosition.x, Screen.height - mousePosition.y);
-        return controlRect.Contains(point) || showEventLog && eventLogRect.Contains(point)
-            || !showEventLog && new Rect(Screen.width - 150, Screen.height - 50, 150, 50).Contains(point);
+        return controlRect.Contains(point) || loaded != null && timelineRect.Contains(point) || scrubbing;
     }
 
     private void DrawPreviewHistory()
@@ -377,23 +359,22 @@ public sealed class PreviewController : MonoBehaviour
             catalogDirectory = directory;
             loadError = string.Empty;
             StartWatcher();
-            resourceEntries = PreviewResourceCatalog.Discover(directory, manifest);
+            resourceEntries = PreviewResourceCatalog.Discover(directory, manifest, LoadManifest, message => Debug.LogWarning(message));
             var selected = PreviewResourceCatalog.Select(resourceEntries, selectedResourceName, manifest);
-            selectedResourceName = selected?.Name ?? string.Empty;
+            selectedResourceName = selected?.Key ?? string.Empty;
             RecordPreviewHistory(resourceDirectory);
             if (loaded != null)
             {
-                loaded.AnimationState.Event -= OnSpineEvent;
                 loaded.Dispose();
                 loaded = null;
             }
             followedBone = null;
             if (boneMarker != null) boneMarker.SetActive(false);
-            eventLog.Clear();
+            ResetTimeline();
             if (selected == null) throw new InvalidOperationException("目录内未找到 Spine 骨架资源。");
-            if (!string.IsNullOrWhiteSpace(displayMode)) manifest.displayMode = displayMode;
-            loaded = PreviewRuntimeLoader.Load(directory, manifest, selected, transform, tintBlack);
-            loaded.AnimationState.Event += OnSpineEvent;
+            var selectedManifest = selected.Manifest;
+            if (!string.IsNullOrWhiteSpace(displayMode)) selectedManifest.displayMode = displayMode;
+            loaded = PreviewRuntimeLoader.Load(selected.Directory, selectedManifest, selected, transform, tintBlack);
             ApplyBoneFollowAfterLoad();
             var animation = loaded.AnimationNames.FirstOrDefault();
             if (!string.IsNullOrWhiteSpace(animation)) Play(animation, true);
@@ -409,7 +390,12 @@ public sealed class PreviewController : MonoBehaviour
 
     private void Play(string animation, bool loop)
     {
+        ResetTimeline();
+        loaded.Skeleton.SetToSetupPose();
         loaded.AnimationState.SetAnimation(0, animation, loop);
+        animationEvents = PreviewAnimationTimeline.ReadEvents(loaded.Data.FindAnimation(animation));
+        playing = true;
+        loaded.AnimationState.TimeScale = speed;
     }
 
     private void SetSkin(string skin)
@@ -591,14 +577,15 @@ public sealed class PreviewController : MonoBehaviour
         if (string.IsNullOrWhiteSpace(resourceDirectory) || !Directory.Exists(resourceDirectory)) return;
         watcher = new FileSystemWatcher(resourceDirectory)
         {
-            IncludeSubdirectories = false,
+            IncludeSubdirectories = true,
             EnableRaisingEvents = true,
-            NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.Size
+            NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName | NotifyFilters.LastWrite | NotifyFilters.Size
         };
-        watcher.Changed += (_, _) => reloadRequested = true;
-        watcher.Created += (_, _) => reloadRequested = true;
-        watcher.Renamed += (_, _) => reloadRequested = true;
-        watcher.Deleted += (_, _) => reloadRequested = true;
+        watcher.Changed += (_, _) => RequestReload();
+        watcher.Created += (_, _) => RequestReload();
+        watcher.Renamed += (_, _) => RequestReload();
+        watcher.Deleted += (_, _) => RequestReload();
+        watcher.Error += (_, _) => RequestReload();
     }
 
     private static string PreviewHistoryPath => Path.Combine(
@@ -659,7 +646,12 @@ public sealed class PreviewController : MonoBehaviour
     private static PreviewManifest LoadManifest(string directory)
     {
         var path = Path.Combine(directory, "preview-manifest.json");
-        return File.Exists(path) ? JsonUtility.FromJson<PreviewManifest>(File.ReadAllText(path)) ?? new PreviewManifest() : new PreviewManifest();
+        try { return File.Exists(path) ? JsonUtility.FromJson<PreviewManifest>(File.ReadAllText(path)) ?? new PreviewManifest() : new PreviewManifest(); }
+        catch (Exception exception) when (exception is IOException || exception is UnauthorizedAccessException || exception is ArgumentException)
+        {
+            Debug.LogWarning("预览配置暂时无法读取，使用默认设置：" + path + "；" + exception.Message);
+            return new PreviewManifest();
+        }
     }
 
     private static string ReadInputDirectory()
@@ -680,7 +672,6 @@ public sealed class PreviewController : MonoBehaviour
     private void OnDestroy()
     {
         watcher?.Dispose();
-        if (loaded != null) loaded.AnimationState.Event -= OnSpineEvent;
         loaded?.Dispose();
         if (checkerTexture != null) Destroy(checkerTexture);
         if (checkerMaterial != null) Destroy(checkerMaterial);
@@ -689,13 +680,6 @@ public sealed class PreviewController : MonoBehaviour
         if (boneMarker != null) Destroy(boneMarker);
     }
 
-    private void OnSpineEvent(Spine.TrackEntry trackEntry, Spine.Event spineEvent)
-    {
-        var animationName = trackEntry?.Animation?.Name ?? "";
-        var line = $"[{Time.time:F3}] {animationName} / {spineEvent.Data.Name}  int={spineEvent.Int} float={spineEvent.Float:0.###} string={spineEvent.String}";
-        eventLog.Enqueue(line);
-        while (eventLog.Count > MaxEventLogCount) eventLog.Dequeue();
-    }
 }
 
 internal static class WindowsFolderPicker

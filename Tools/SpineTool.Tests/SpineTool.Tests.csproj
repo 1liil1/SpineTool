@@ -13,6 +13,8 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Program.cs" />
+    <Compile Include="PreviewUpgradeChecks.cs" />
+    <Compile Include="../SpinePreviewer/Assets/Scripts/PreviewAnimationTimeline.cs" Link="PreviewAnimationTimeline.cs" />
     <Compile Include="../SpinePreviewer/Assets/Scripts/PreviewResourceCatalog.cs" Link="PreviewResourceCatalog.cs" />
     <Compile Include="../SpinePreviewer/Assets/Scripts/PreviewManifest.cs" Link="PreviewManifest.cs" />
     <ProjectReference Include="../SpineTool/SpineTool.csproj" />

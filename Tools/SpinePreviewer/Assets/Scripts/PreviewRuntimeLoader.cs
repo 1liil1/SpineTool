@@ -96,7 +96,7 @@ public static class PreviewRuntimeLoader
     {
         var resource = PreviewResourceCatalog.Select(PreviewResourceCatalog.Discover(directory, manifest), null, manifest);
         if (resource == null) throw new InvalidOperationException("未找到 JSON 或 SKEL 骨架数据。");
-        return Load(directory, manifest, resource, parent, tintBlack);
+        return Load(resource.Directory, resource.Manifest, resource, parent, tintBlack);
     }
 
     public static PreviewLoadedAsset Load(string directory, PreviewManifest manifest, PreviewResourceEntry resource, Transform parent, bool tintBlack = true)

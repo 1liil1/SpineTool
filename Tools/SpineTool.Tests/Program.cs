@@ -162,6 +162,8 @@ foreach (var name in new[] { "one", "two" }) File.WriteAllText(Path.Combine(shar
 if (PreviewResourceCatalog.Discover(sharedDirectory).Any(x => Path.GetFileName(x.AtlasPath) != "shared.atlas" || x.Error != ""))
     throw new InvalidOperationException("Multiple skeletons must support one shared atlas.");
 
+PreviewUpgradeChecks.Run(temp.Path);
+
 Exception? uiFailure = null;
 var uiThread = new Thread(() =>
 {
