@@ -2,8 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Runtime.InteropServices;
-using System.Text;
 using UnityEngine;
 
 [DefaultExecutionOrder(-100)]
@@ -95,6 +93,9 @@ public sealed partial class PreviewController : MonoBehaviour
 
     private void Update()
     {
+#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+        HandleWindowsInput();
+#endif
         UpdateUiRects();
         if (reloadRequested && (DateTime.UtcNow - lastResourceChangeUtc).TotalMilliseconds >= 300)
         {
@@ -155,15 +156,10 @@ public sealed partial class PreviewController : MonoBehaviour
         GUILayout.BeginArea(controlRect, GUI.skin.box);
         controlScroll = GUILayout.BeginScrollView(controlScroll, false, false, GUIStyle.none, GUI.skin.verticalScrollbar, menuScrollStyle);
         GUILayout.Label("Spine Previewer", GUI.skin.label);
-        if (GUILayout.Button("选择资源文件夹"))
-        {
-            var selected = WindowsFolderPicker.PickFolder();
-            if (!string.IsNullOrWhiteSpace(selected))
-            {
-                resourceDirectory = selected;
-                LoadResource();
-            }
-        }
+#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+        if (GUILayout.Button("选择资源文件夹") && folderPicker == null)
+            folderPicker = WindowsPreviewInput.PickFolderAsync(resourceDirectory);
+#endif
         GUILayout.Label(resourceDirectory ?? "未加载资源", wrappedLabel);
         DrawResourceSelector();
         if (!string.IsNullOrWhiteSpace(loadError)) GUILayout.Label(loadError, wrappedLabel);
@@ -671,6 +667,9 @@ public sealed partial class PreviewController : MonoBehaviour
 
     private void OnDestroy()
     {
+#if UNITY_STANDALONE_WIN && !UNITY_EDITOR
+        WindowsPreviewInput.StopFileDrop();
+#endif
         watcher?.Dispose();
         loaded?.Dispose();
         if (checkerTexture != null) Destroy(checkerTexture);
@@ -680,57 +679,5 @@ public sealed partial class PreviewController : MonoBehaviour
         if (boneMarker != null) Destroy(boneMarker);
     }
 
-}
-
-internal static class WindowsFolderPicker
-{
-#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    private struct BrowseInfo
-    {
-        public IntPtr hwndOwner;
-        public IntPtr pidlRoot;
-        public string pszDisplayName;
-        public string lpszTitle;
-        public uint ulFlags;
-        public IntPtr lpfn;
-        public IntPtr lParam;
-        public int iImage;
-    }
-
-    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
-    private static extern IntPtr SHBrowseForFolder(ref BrowseInfo browseInfo);
-
-    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
-    private static extern bool SHGetPathFromIDList(IntPtr pidl, StringBuilder path);
-
-    [DllImport("ole32.dll")]
-    private static extern void CoTaskMemFree(IntPtr memory);
-
-    public static string PickFolder()
-    {
-        var displayName = new string('\0', 260);
-        var info = new BrowseInfo
-        {
-            hwndOwner = IntPtr.Zero,
-            pszDisplayName = displayName,
-            lpszTitle = "选择 Spine 资源文件夹",
-            ulFlags = 0x0041
-        };
-        var pidl = SHBrowseForFolder(ref info);
-        if (pidl == IntPtr.Zero) return string.Empty;
-        try
-        {
-            var path = new StringBuilder(1024);
-            return SHGetPathFromIDList(pidl, path) ? path.ToString() : string.Empty;
-        }
-        finally
-        {
-            CoTaskMemFree(pidl);
-        }
-    }
-#else
-    public static string PickFolder() => string.Empty;
-#endif
 }
 

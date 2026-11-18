@@ -14,6 +14,7 @@ using IdleGearDefence.SpineValidator;
 using ExporterEngine = IdleGearDefence.SpineExporter.SpineExporter;
 using WpfKeyEventArgs = System.Windows.Input.KeyEventArgs;
 using WpfComboBox = System.Windows.Controls.ComboBox;
+using WpfDragEventArgs = System.Windows.DragEventArgs;
 using WpfTextBox = System.Windows.Controls.TextBox;
 
 namespace IdleGearDefence.SpineTool;
@@ -461,8 +462,8 @@ public partial class MainWindow : Window
 
     private void BrowseBatchRoot_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new System.Windows.Forms.FolderBrowserDialog { SelectedPath = BatchRootTextBox.Text };
-        if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK) BatchRootTextBox.Text = dialog.SelectedPath;
+        var selected = PickFolder("选择批量验证根目录", BatchRootTextBox.Text);
+        if (selected != null) BatchRootTextBox.Text = selected;
     }
 
     private void BatchPreview_Click(object sender, RoutedEventArgs e)
@@ -493,8 +494,8 @@ public partial class MainWindow : Window
 
     private void ImportPreview_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new System.Windows.Forms.FolderBrowserDialog();
-        if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK) LaunchPreviewer(dialog.SelectedPath);
+        var selected = PickFolder("选择 Spine 资源文件夹");
+        if (selected != null) LaunchPreviewer(selected);
     }
 
     private void LaunchPreviewer(string directory)
@@ -653,20 +654,95 @@ public partial class MainWindow : Window
 
     private void BrowseProject_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "Spine Project (*.spine)|*.spine|All files (*.*)|*.*" };
-        if (dialog.ShowDialog(this) == true)
+        var currentPath = ProjectPathTextBox.Text.Trim();
+        var directory = File.Exists(currentPath) ? Path.GetDirectoryName(currentPath) : null;
+        var selected = PickProjectFile(directory);
+        if (selected != null) SetProjectPath(selected);
+    }
+
+    private string? PickProjectFile(string? directory, bool multipleProjects = false)
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
         {
-            ProjectPathTextBox.Text = dialog.FileName;
-            if (string.IsNullOrWhiteSpace(CardNameTextBox.Text) || CardNameTextBox.Text == "新 Spine 任务") CardNameTextBox.Text = Path.GetFileNameWithoutExtension(dialog.FileName);
+            Title = multipleProjects ? "目录中有多个工程，请选择一个 .spine 文件" : "选择 Spine 工程",
+            InitialDirectory = directory ?? string.Empty,
+            Filter = multipleProjects ? "Spine 工程 (*.spine)|*.spine" : "Spine 工程 (*.spine)|*.spine|所有文件 (*.*)|*.*"
+        };
+        return dialog.ShowDialog(this) == true ? dialog.FileName : null;
+    }
+
+    private void SetProjectPath(string path)
+    {
+        ProjectPathTextBox.Text = path;
+        if (string.IsNullOrWhiteSpace(CardNameTextBox.Text) || CardNameTextBox.Text == "新 Spine 任务")
+            CardNameTextBox.Text = Path.GetFileNameWithoutExtension(path);
+    }
+
+    private static string[]? GetDroppedPaths(WpfDragEventArgs e) =>
+        e.Data.GetData(System.Windows.DataFormats.FileDrop, autoConvert: false) as string[];
+
+    private static bool IsSpineProject(string path) =>
+        string.Equals(Path.GetExtension(path), ".spine", StringComparison.OrdinalIgnoreCase);
+
+    private void Window_PreviewDragOver(object sender, WpfDragEventArgs e)
+    {
+        if (GetDroppedPaths(e) is not { } paths) return;
+        e.Effects = _operationCts == null && paths is [var path] && (Directory.Exists(path) || IsSpineProject(path))
+            ? System.Windows.DragDropEffects.Copy
+            : System.Windows.DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void Window_PreviewDrop(object sender, WpfDragEventArgs e)
+    {
+        if (GetDroppedPaths(e) is not { } paths) return;
+        e.Handled = true;
+        if (_operationCts != null || paths is not [var path]) return;
+
+        try
+        {
+            string? project;
+            if (Directory.Exists(path))
+            {
+                var options = new EnumerationOptions { RecurseSubdirectories = true, AttributesToSkip = FileAttributes.ReparsePoint };
+                var candidates = Directory.EnumerateFiles(path, "*", options).Where(IsSpineProject).Take(2).ToArray();
+                if (candidates.Length == 0)
+                {
+                    SetStatus("拖入的文件夹中未找到 .spine 工程");
+                    return;
+                }
+                project = candidates.Length == 1 ? candidates[0] : PickProjectFile(path, multipleProjects: true);
+            }
+            else
+            {
+                project = IsSpineProject(path) && File.Exists(path) ? path : null;
+            }
+
+            if (project == null || !IsSpineProject(project)) return;
+            MainTabs.SelectedItem = ProjectTab;
+            SetProjectPath(project);
+            SetStatus("已选择 Spine 工程：" + Path.GetFileName(project));
         }
+        catch (Exception exception) when (exception is ArgumentException or IOException or UnauthorizedAccessException)
+        {
+            SetStatus("读取拖入的工程失败：" + exception.Message);
+        }
+    }
+
+    private string? PickFolder(string title, string? currentDirectory = null)
+    {
+        var dialog = new OpenFolderDialog { Title = title };
+        var directory = currentDirectory?.Trim();
+        if (Directory.Exists(directory)) dialog.InitialDirectory = directory;
+        return dialog.ShowDialog(this) == true ? dialog.FolderName : null;
     }
 
     private void BrowseOutput_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new System.Windows.Forms.FolderBrowserDialog { SelectedPath = OutputPathComboBox.Text };
-        if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+        var selected = PickFolder("选择输出根目录", OutputPathComboBox.Text);
+        if (selected != null)
         {
-            OutputPathComboBox.Text = dialog.SelectedPath;
+            OutputPathComboBox.Text = selected;
             RememberOutputDirectory();
         }
     }
